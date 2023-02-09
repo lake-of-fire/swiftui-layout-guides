@@ -68,9 +68,13 @@ public struct FitReadableContentWidth<Content>: View where Content: View {
     @Environment(\.readableContentInsets) var readableContentInsets
     var body: some View {
       content
+#if os(iOS) || os(tvOS)
         .frame(maxWidth: .infinity, alignment: alignment)
         .padding(.leading, readableContentInsets.leading)
         .padding(.trailing, readableContentInsets.trailing)
+#else
+        .frame(maxWidth: 800, alignment: alignment)
+#endif
     }
   }
 }
