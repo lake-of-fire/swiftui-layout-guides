@@ -202,10 +202,31 @@ struct LayoutGuidesModifier: ViewModifier {
 
 #if os(iOS) || os(tvOS)
   import UIKit
+  var debounceTask: Task<(), Never>?
+  func debounce(seconds: Double = 0.01, operation: @escaping () -> Void) {
+    if (debounceTask?.isCancelled ?? false) || debounceTask == nil {
+      operation()
+      return
+    }
+      
+    debounceTask?.cancel()
+
+    debounceTask = Task {
+      do {
+        try await Task.sleep(nanoseconds: UInt64(round(seconds * 1_000_000_000)))
+        Task { @MainActor in
+          operation()
+        }
+      } catch {
+        // TODO
+      }
+    }
+  }
+      
   struct LayoutGuides: UIViewRepresentable {
     let onLayoutMarginsGuideChange: (EdgeInsets) -> Void
     let onReadableContentGuideChange: (EdgeInsets) -> Void
-
+      
     func makeUIView(context: Context) -> LayoutGuidesView {
       let uiView = LayoutGuidesView()
       uiView.onLayoutMarginsGuideChange = onLayoutMarginsGuideChange
@@ -224,13 +245,17 @@ struct LayoutGuidesModifier: ViewModifier {
       
       override func layoutMarginsDidChange() {
         super.layoutMarginsDidChange()
-        updateLayoutMargins()
-        updateReadableContent()
+        debounce {
+          self.updateLayoutMargins()
+          self.updateReadableContent()
+        }
       }
 
       override func layoutSubviews() {
         super.layoutSubviews()
-        updateReadableContent()
+        debounce {
+            self.updateReadableContent()
+        }
       }
 
       // `layoutSubviews` doesn't seem late enough to retrieve an up-to-date `readableContentGuide`
@@ -239,14 +264,18 @@ struct LayoutGuidesModifier: ViewModifier {
       // heuristic would be preferable.
       override var frame: CGRect {
         didSet {
-          self.updateReadableContent()
+          debounce {
+            self.updateReadableContent()
+          }
         }
       }
 
       override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if traitCollection.layoutDirection != previousTraitCollection?.layoutDirection {
-          updateReadableContent()
+          debounce {
+            self.updateReadableContent()
+          }
         }
       }
 
@@ -282,6 +311,8 @@ struct LayoutGuidesModifier: ViewModifier {
           trailing: isRightToLeft ? readableContentInsets.left : readableContentInsets.right
         )
         guard previousReadableContentGuide != edgeInsets else { return }
+        // Sometimes we get caught in an infinite loop (on rotation?) where trailing flips between several values
+        guard previousReadableContentGuide?.leading != edgeInsets.leading && previousReadableContentGuide?.trailing != edgeInsets.trailing else { return }
         onReadableContentGuideChange(edgeInsets)
         previousReadableContentGuide = edgeInsets
       }
