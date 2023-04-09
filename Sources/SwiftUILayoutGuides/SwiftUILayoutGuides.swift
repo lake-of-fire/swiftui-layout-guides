@@ -77,7 +77,7 @@ public struct FitReadableContentWidth<Content>: View where Content: View {
         .padding(.leading, edges.contains(.leading) ? readableContentInsets.leading : 0)
         .padding(.trailing, edges.contains(.trailing) ? readableContentInsets.trailing : 0)
 #else
-        .frame(maxWidth: 766, alignment: alignment)
+        .frame(maxWidth: 1000, alignment: alignment)
 #endif
     }
   }
